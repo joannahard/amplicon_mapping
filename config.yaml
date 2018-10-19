@@ -1,0 +1,7 @@
+
+ref: "/media/box2/Experiments/Joanna/Snake_analys/j_frisen_1602/indexfiles/human_g1k_v37_decoy.fasta" 
+javaopts: "-Xmx5g -Djava.io.tmpdir=`pwd`/tmp"
+
+
+
+
