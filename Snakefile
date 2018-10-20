@@ -49,7 +49,7 @@ rule filter_and_fix:
     output:
         "data/output/{smp}/mapped/{smp}.filtered.bwa.bam"
     params:
-        filters = "-b -q 2 -F 1028",
+        filters = "-b -q 2 -F 8",
         sort = "SORT_ORDER=coordinate",
         read_groups = "CREATE_INDEX=true RGID={smp} RGLB={smp} RGPL=ILLUMINA RGSM={smp} RGCN=\"NA\" RGPU=\"NA\"",
         java = config["javaopts"]
