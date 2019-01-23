@@ -1,53 +1,41 @@
-SAMPLES, = glob_wildcards("data/input/{smp}_r1_paired.fastq.gz")
+SAMPLES, = glob_wildcards("data/input/{smp}.2.fastq.gz")
 
 
 
 rule all:
     input:
-        expand("data/output/{smp}/mapped/{smp}.mapped.bwa.sam", smp=SAMPLES),
         expand("data/output/{smp}/mapped/{smp}.mapped.bwa.bam", smp=SAMPLES),
         expand("data/output/{smp}/mapped/{smp}.filtered.bwa.bam", smp=SAMPLES),
         expand("data/output/{smp}/mapped/{smp}.filtered.sorted.bwa.bam", smp=SAMPLES),
         expand("data/output/{smp}/mapped/{smp}.filtered.sorted.bwa.bam.bai", smp=SAMPLES),
-        expand("data/output/{smp}/fastqc/", smp=SAMPLES)
-        expand("data/output/{smp}/logs/{smp}.qualimap/qualimapReport.html", smp=SAMPLES)        
+        expand("data/output/{smp}/mapped/{smp}_ac.txt", smp=SAMPLES),
 
 rule bwa:
     input:
-        r1 = "data/input/{smp}_r1_paired.fastq.gz",
-        r2 = "data/input/{smp}_r2_paired.fastq.gz",
+        r1 = "data/input/{smp}.1.fastq.gz",
+        r2 = "data/input/{smp}.2.fastq.gz",
         ref = config["ref"],
         index = config["ref"] + ".bwt"
     output:
-        "data/output/{smp}/mapped/{smp}.mapped.bwa.sam"
+        temp("data/output/{smp}/mapped/{smp}.mapped.bwa.bam")
     threads: 16
     params:
-        "-M"
-    log:
-        "data/output/{smp}/logs/{smp}.bwa.log",
-    shell:
-        "bwa mem {params} -t {threads} {input.ref} {input.r1} {input.r2} 2> {log} > {output}"
-
-
-
-rule sam_to_bam:
-    input:
-        "data/output/{smp}/mapped/{smp}.mapped.bwa.sam"
-    output:
-        "data/output/{smp}/mapped/{smp}.mapped.bwa.bam"
-    params:
+        bwa = "-M",
         java = config["javaopts"]
     log:
-        "data/output/{smp}/logs/{smp}.picard.sam2bam.log"
+        bwa = "data/output/{smp}/logs/{smp}.bwa.log",
+        sambam = "data/output/{smp}/logs/{smp}.picard_samtobam.log"
     shell:
-        "picard {params.java} SamFormatConverter INPUT={input} OUTPUT={output} > {log} 2>&1;"
+        "bwa mem {params.bwa} -t {threads} {input.ref} {input.r1} {input.r2} 2> {log.bwa} > {output} | "
+        "picard {params.java} SamFormatConverter INPUT=/dev/stdin OUTPUT={output} 2> {log.sambam}"
+
 
 
 rule filter_and_fix:
     input:
         "data/output/{smp}/mapped/{smp}.mapped.bwa.bam"
     output:
-        "data/output/{smp}/mapped/{smp}.filtered.bwa.bam"
+        temp("data/output/{smp}/mapped/{smp}.filtered.bwa.bam")
     params:
         filters = "-b -q 2 -F 8",
         sort = "SORT_ORDER=coordinate",
@@ -82,30 +70,15 @@ rule samtools_index:
         "samtools index {input}"
 
 
-
-
-rule qualimap:
-    input: "data/output/{smp}/mapped/{smp}.filtered.bwa.bam"
-    output:
-      report = "data/output/{smp}/logs/{smp}.qualimap/qualimapReport.html",
-      gr = "data/output/{smp}/logs/{smp}.qualimap/genome_results.txt",
-      ish = "data/output/{smp}/logs/{smp}.qualimap/raw_data_qualimapReport/insert_size_histogram.txt",
-      ch = "data/output/{smp}/logs/{smp}.qualimap/raw_data_qualimapReport/coverage_histogram.txt",
-      gc = "data/output/{smp}/logs/{smp}.qualimap/raw_data_qualimapReport/mapped_reads_gc-content_distribution.txt"
-    log: "data/output/{smp}/logs/{smp}.qualimap/qualimap.log"
-    params: "-sd -sdmode 0 --java-mem-size=20G -c -nw 400 -gd hg19"
-    threads: 10
-    shell: "qualimap bamqc -nt {threads} {params} -bam {input} -outdir $(dirname {output.report}) > {log} 2>&1;"
-
-
-
-rule fastqc:
+rule ac:
     input:
-        r1 = "data/input/{smp}_r1_paired.fastq.gz",
-        r2 = "data/input/{smp}_r2_paired.fastq.gz"
+        bam = "data/output/{smp}/mapped/{smp}.filtered.sorted.bwa.bam",
+        index = "data/output/{smp}/mapped/{smp}.filtered.sorted.bwa.bam.bai",
+        ref = config["ref"],
+        loci = config["loci"]
     output:
-        "data/output/{smp}/fastqc/"
+        "data/output/{smp}/mapped/{smp}_ac.txt"
     shell:
-        "fastqc --quiet --outdir {output} --extract  -f fastq {input.r1} {input.r2}"
+        "alleleCounter -l {input.loci} -r {input.ref} -b {input.bam} -o {output}"
 
 
